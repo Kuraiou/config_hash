@@ -25,9 +25,9 @@ PLATFORMS
   ruby
 
 DEPENDENCIES
-  bundler
+  bundler (~> 1.11)
   config_hash!
-  rspec
+  rspec (~> 3.4)
 
 BUNDLED WITH
    1.11.2

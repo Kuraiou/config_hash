@@ -11,6 +11,6 @@ Gem::Specification.new do |s|
   s.files = ['lib/config_hash.rb', 'lib/config_hash/processors.rb']
   s.require_path = 'lib'
 
-  s.add_development_dependency 'bundler'
-  s.add_development_dependency 'rspec'
+  s.add_development_dependency 'bundler', '~> 1.11'
+  s.add_development_dependency 'rspec', '~> 3.4'
 end
