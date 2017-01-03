@@ -16,26 +16,17 @@ class ConfigHash < Hash
       @processors << ConfigHash::Processors.method(proc) if options[proc]
     end
 
-    super(default, &default_block)
-
-    # recursively construct this hash from the passed in hash.
+    # recursively reconstruct this hash from the passed in hash.
     hash.each do |key, value|
-      key = key.is_a?(String) ? key.to_sym : key # force strings to symbols
-      self[construct(key)] = construct(value)
+      key = key.to_sym if key.is_a?(String)
+      self[key] = construct(value)
 
-      if key.is_a? Symbol # allow '.' notation for symbol keys.
-        self.instance_eval("def #{key}; process(self[:#{key}]); end")
+      class << self; self; end.class_eval do
+        define_method(key) { self[key] }
       end
     end
 
     self.freeze if @freeze
-  end
-
-  def [](key, in_process=false)
-    key = key.is_a?(String) ? key.to_sym : key
-    return super(key) if in_process
-
-    process(self.send(:[], key, true)) # make sure to process reutrn values
   end
 
   def method_missing(method, *args)
@@ -45,9 +36,10 @@ class ConfigHash < Hash
     if method =~ /^(.*)=$/ && args.length == 1
       key = method.to_s.tr('=', '').to_sym
       self[key] = args[0]
-      self.instance_eval("def #{key}; process(self[:#{key}]); end")
-    else
-      nil # it's a non-defined value.
+
+      class << self; self; end.class_eval do
+        define_method(key) { self[key] }
+      end
     end
   end
 
@@ -55,7 +47,10 @@ class ConfigHash < Hash
     return super(key, &blk) if @freeze
 
     key = key.is_a?(String) ? key.to_sym : key
-    instance_eval("undef #{key}") if respond_to?(key)
+    class << self; self; end.class_eval do
+      remove_method(key)
+    end
+
     super(key, &blk)
   end
 
@@ -67,21 +62,16 @@ class ConfigHash < Hash
 
   def construct(value)
     case value
-      when ConfigHash then value
-      when Hash       then ConfigHash.new(
+      when ConfigHash                  then value
+      when Hash                        then ConfigHash.new(
         value,
         value.default,
         freeze: @freeze, processors: @processors,
         &value.default_proc
       )
-      when Array      then dup_if_appropriate(value).map { |sv| construct(sv) }
-      else                 dup_if_appropriate(value)
+      when Array                       then value.map { |sv| construct(sv) }
+      when Class, Module, Proc, Method then value
+      else                                  @processors.any? ? process(value) : value
     end.tap { |calced| calced.freeze if @freeze }
-  end
-
-  def dup_if_appropriate(v)
-    # if it is a class, module, or proc, DO NOT DUP
-    return v if [Class, Module, Proc].any? { |kls| v.instance_of?(kls) }
-    v.dup rescue v # on symbol, integer just return value
   end
 end
