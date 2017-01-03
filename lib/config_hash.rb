@@ -21,33 +21,50 @@ class ConfigHash < Hash
     # recursively construct this hash from the passed in hash.
     hash.each do |key, value|
       key = key.is_a?(String) ? key.to_sym : key # force strings to symbols
-      self[construct(key)] = construct(value)
-
-      if key.is_a? Symbol # allow '.' notation for symbol keys.
-        self.instance_eval("def #{key}; process(self[:#{key}]); end")
-      end
+      self[key] = construct(value)
     end
 
     self.freeze if @freeze
   end
 
   def [](key, in_process=false)
-    key = key.is_a?(String) ? key.to_sym : key
-    return super(key) if in_process
+    return super(key) if in_process || @processors.empty?
 
-    process(self.send(:[], key, true)) # make sure to process reutrn values
+    value = self.send(:[], key, true)
+    case value
+    when ConfigHash, Hash, Array, Proc, Method, Class, Module then value
+    else
+      @processors.any? ? process(value) : value
+    end
   end
 
   def method_missing(method, *args)
-    return super(method, *args) if @freeze
-
     # if we're not freezing, we can allow assignment and expect nil results.
     if method =~ /^(.*)=$/ && args.length == 1
       key = method.to_s.tr('=', '').to_sym
       self[key] = args[0]
-      self.instance_eval("def #{key}; process(self[:#{key}]); end")
+      class << self; self; end.class_eval do
+        define_method(key) do
+          val = self[key]
+          case val
+          when ConfigHash, Hash, Array, Proc, Method, Class, Module then val
+          else # only process leaf values that are processable.
+            @processors.any? ? process(val) : val
+          end
+        end
+      end
     else
-      nil # it's a non-defined value.
+      class << self; self; end.class_eval do
+        define_method(method) do
+          val = self[key]
+          case val
+          when ConfigHash, Hash, Array, Proc, Method, Class, Module then val
+          else
+            @processors.any? ? process(val) : val
+          end
+        end
+      end
+      self[method]
     end
   end
 
@@ -55,7 +72,10 @@ class ConfigHash < Hash
     return super(key, &blk) if @freeze
 
     key = key.is_a?(String) ? key.to_sym : key
-    instance_eval("undef #{key}") if respond_to?(key)
+    class << self; self; end.class_eval do
+      remove_method(key)
+    end
+
     super(key, &blk)
   end
 
@@ -74,14 +94,8 @@ class ConfigHash < Hash
         freeze: @freeze, processors: @processors,
         &value.default_proc
       )
-      when Array      then dup_if_appropriate(value).map { |sv| construct(sv) }
-      else                 dup_if_appropriate(value)
+      when Array      then value.map { |sv| construct(sv) }
+      else                 value
     end.tap { |calced| calced.freeze if @freeze }
-  end
-
-  def dup_if_appropriate(v)
-    # if it is a class, module, or proc, DO NOT DUP
-    return v if [Class, Module, Proc].any? { |kls| v.instance_of?(kls) }
-    v.dup rescue v # on symbol, integer just return value
   end
 end
