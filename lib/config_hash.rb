@@ -16,55 +16,30 @@ class ConfigHash < Hash
       @processors << ConfigHash::Processors.method(proc) if options[proc]
     end
 
-    super(default, &default_block)
-
-    # recursively construct this hash from the passed in hash.
+    # recursively reconstruct this hash from the passed in hash.
     hash.each do |key, value|
-      key = key.is_a?(String) ? key.to_sym : key # force strings to symbols
+      key = key.to_sym if key.is_a?(String)
       self[key] = construct(value)
+
+      class << self; self; end.class_eval do
+        define_method(key) { self[key] }
+      end
     end
 
     self.freeze if @freeze
   end
 
-  def [](key, in_process=false)
-    return super(key) if in_process || @processors.empty?
-
-    value = self.send(:[], key, true)
-    case value
-    when ConfigHash, Hash, Array, Proc, Method, Class, Module then value
-    else
-      @processors.any? ? process(value) : value
-    end
-  end
-
   def method_missing(method, *args)
+    return super(method, *args) if @freeze
+
     # if we're not freezing, we can allow assignment and expect nil results.
     if method =~ /^(.*)=$/ && args.length == 1
       key = method.to_s.tr('=', '').to_sym
       self[key] = args[0]
+
       class << self; self; end.class_eval do
-        define_method(key) do
-          val = self[key]
-          case val
-          when ConfigHash, Hash, Array, Proc, Method, Class, Module then val
-          else # only process leaf values that are processable.
-            @processors.any? ? process(val) : val
-          end
-        end
+        define_method(key) { self[key] }
       end
-    else
-      class << self; self; end.class_eval do
-        define_method(method) do
-          val = self[key]
-          case val
-          when ConfigHash, Hash, Array, Proc, Method, Class, Module then val
-          else
-            @processors.any? ? process(val) : val
-          end
-        end
-      end
-      self[method]
     end
   end
 
@@ -87,15 +62,16 @@ class ConfigHash < Hash
 
   def construct(value)
     case value
-      when ConfigHash then value
-      when Hash       then ConfigHash.new(
+      when ConfigHash                  then value
+      when Hash                        then ConfigHash.new(
         value,
         value.default,
         freeze: @freeze, processors: @processors,
         &value.default_proc
       )
-      when Array      then value.map { |sv| construct(sv) }
-      else                 value
+      when Array                       then value.map { |sv| construct(sv) }
+      when Class, Module, Proc, Method then value
+      else                                  @processors.any? ? process(value) : value
     end.tap { |calced| calced.freeze if @freeze }
   end
 end
