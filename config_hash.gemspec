@@ -13,4 +13,5 @@ Gem::Specification.new do |s|
 
   s.add_development_dependency 'bundler', '~> 1.11'
   s.add_development_dependency 'rspec', '~> 3.4'
+  s.add_development_dependency 'pry'
 end
