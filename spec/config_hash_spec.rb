@@ -3,6 +3,11 @@ require 'config_hash'
 RSpec.describe ConfigHash do
   let(:root) do
     {
+      nonstring_keys: {
+        1 => true,
+        true => 1,
+        (0..10) => 'yay',
+      },
       k: [
         {
           v: :bar,
@@ -27,8 +32,9 @@ RSpec.describe ConfigHash do
   let(:config_hash) { ConfigHash.new(root, options) }
   let(:options) { {} }
 
+  subject { config_hash }
+
   describe 'initialization options' do
-    subject { config_hash }
 
     describe ':freeze' do
       it 'defaults to true, and freezes values when true' do
@@ -98,6 +104,12 @@ RSpec.describe ConfigHash do
   end
 
   describe '#[]' do
+    it 'handles non-numeric keys' do
+      expect(subject[:nonstring_keys][1]).to eq true
+      expect(subject[:nonstring_keys][true]).to eq 1
+      expect(subject[:nonstring_keys][(0..10)]).to eq 'yay'
+    end
+
     it 'converts strings to symbols' do
       expect(config_hash['k']).to eq config_hash[:k]
     end

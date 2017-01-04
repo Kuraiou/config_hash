@@ -23,30 +23,25 @@ class ConfigHash < Hash
     hash.each do |key, value|
       key = key.to_sym if key.is_a?(String)
       self[key] = construct(value)
-
-      raise "Only Strings and Symbols may be keys!" unless key.is_a?(String) || key.is_a?(Symbol)
-
-      class << self; self; end.class_eval do
-        define_method(key) do
-          if @lazy_loading
-            @processed[key] ||= process(self[key])
-          else
-            self[key]
-          end
-        end
-      end
     end
 
     self.freeze if @freeze
   end
 
   def [](key)
-    key = key.to_sym if key.is_a?(String)
+    key = key.to_sym if key.is_a? String
     if @lazy_loading
       @processed[key] ||= process(super(key))
     else
       super(key)
     end
+  end
+
+  def []=(key, value)
+    return super(key, value) if self.frozen?
+
+    key = key.to_sym if key.is_a? String
+    super(key, value).tap { __build_accessor(key) }
   end
 
   def method_missing(method, *args)
@@ -56,21 +51,12 @@ class ConfigHash < Hash
     if method =~ /^(.*)=$/ && args.length == 1
       key = method.to_s.tr('=', '').to_sym
       self[key] = args[0]
-
-      class << self; self; end.class_eval do
-        define_method(key) do
-          if @lazy_loading
-            @processed[key] ||= process(self[key])
-          else
-            self[key]
-          end
-        end
-      end
+      __build_accessor(key)
     end
   end
 
   def delete(key, &blk)
-    return super(key, &blk) if @freeze
+    return super(key, &blk) if self.frozen?
 
     key = key.is_a?(String) ? key.to_sym : key
     class << self; self; end.class_eval do
@@ -81,6 +67,14 @@ class ConfigHash < Hash
   end
 
   private
+
+  def __build_accessor(key)
+    return unless key.is_a?(Symbol) && key !~ /^\d/
+
+    class << self; self; end.class_eval do
+      define_method(key) { self[key] }
+    end
+  end
 
   def process(value)
     @processors.reduce(value) { |modified, proc| proc.call(modified) }
