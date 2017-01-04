@@ -8,7 +8,7 @@ RSpec.describe ConfigHash do
           v: :bar,
           'x' => [
             'test',
-            { true => 'z' }
+            { 'TRUE' => 'z' }
           ],
         },
         3,
@@ -17,7 +17,7 @@ RSpec.describe ConfigHash do
           { 'test' => true }
         ]
       ],
-      1 => {
+      :d1 => {
         x: {
           z: 3
         }
@@ -33,8 +33,9 @@ RSpec.describe ConfigHash do
     describe ':freeze' do
       it 'defaults to true, and freezes values when true' do
         expect(subject.k).to be_frozen # root
-        expect(subject[1].x).to be_frozen # intermediary
-        expect(subject.k[0]['x'][1][true]).to be_frozen # leaf
+        expect(subject[:d1].x).to be_frozen # intermediary
+        # require 'pry'; binding.pry
+        expect(subject.k[0]['x'][1][:TRUE]).to be_frozen # leaf
       end
 
       context 'freeze: false' do
@@ -42,8 +43,8 @@ RSpec.describe ConfigHash do
 
         it 'does not freeze values' do
           expect(subject.k).to_not be_frozen # root
-          expect(subject[1].x).to_not be_frozen # intermediary
-          expect(subject.k[0]['x'][1][true]).to_not be_frozen # leaf
+          expect(subject[:d1].x).to_not be_frozen # intermediary
+          expect(subject.k[0]['x'][1]['TRUE']).to_not be_frozen # leaf and conversion
         end
       end
     end
@@ -60,6 +61,28 @@ RSpec.describe ConfigHash do
         let(:options) { {processors: ['foo']} }
         it 'raises an error' do
           expect{ subject }.to raise_error(ArgumentError)
+        end
+      end
+    end
+
+    describe ':lazy_loading' do
+      let(:options) { {processors: [->(v) { v.is_a?(Numeric) ? v+5 : v}] } }
+
+      it 'is false by default and processes all values at run-time' do
+        expect{ config_hash[:d1][:x][:z] }.to_not change{ config_hash[:d1][:x].instance_variable_get(:@processed).length }
+      end
+
+      context 'lazy_loading: true' do
+        let(:options) { {lazy_loading: true, processors: [->(v) { v.is_a?(Numeric) ? v+5 : v}] } }
+
+        it 'does not process at construction time' do
+          allow_any_instance_of(ConfigHash).to receive(:process).with(anything).and_call_original
+          expect_any_instance_of(ConfigHash).to_not receive(:process).with(3)
+          config_hash
+        end
+
+        it 'does still process the value' do
+          expect{ config_hash[:d1][:x][:z] }.to change{ config_hash[:d1][:x].instance_variable_get(:@processed).length }.by(1)
         end
       end
     end
@@ -83,7 +106,7 @@ RSpec.describe ConfigHash do
       let(:options) { {processors: [->(v) { v.is_a?(Numeric) ? v+5 : v}] } }
 
       it 'returns the processed value' do
-        expect(config_hash[1][:x][:z]).to eq 8 # from 3 + 5
+        expect(config_hash[:d1][:x][:z]).to eq 8 # from 3 + 5
       end
     end
   end

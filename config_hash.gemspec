@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name = 'config_hash'
-  s.version = '1.1.0'
+  s.version = '1.1.5'
   s.summary = 'a hash built for configurations.'
   s.description = 'A safe hash that can process values and use dot notation.'
   s.authors = ['Zach Lome']
