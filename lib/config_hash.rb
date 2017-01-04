@@ -6,8 +6,11 @@ class ConfigHash < Hash
       raise ArgumentError.new("first argument must be a hash!")
     end
 
-    @freeze     = options.fetch(:freeze, true)
-    @processors = options.fetch(:processors, [])
+    @freeze       = options.fetch(:freeze, true)
+    @lazy_loading = options.fetch(:lazy_loading, false)
+    @processors   = options.fetch(:processors, [])
+    @processed    = {}
+
     if !(@processors.is_a?(Array) && @processors.all? { |p| p.is_a?(Proc) || p.is_a?(Method) })
       raise ArgumentError.new("processors must be a list of callables!")
     end
@@ -21,12 +24,29 @@ class ConfigHash < Hash
       key = key.to_sym if key.is_a?(String)
       self[key] = construct(value)
 
+      raise "Only Strings and Symbols may be keys!" unless key.is_a?(String) || key.is_a?(Symbol)
+
       class << self; self; end.class_eval do
-        define_method(key) { self[key] }
+        define_method(key) do
+          if @lazy_loading
+            @processed[key] ||= process(self[key])
+          else
+            self[key]
+          end
+        end
       end
     end
 
     self.freeze if @freeze
+  end
+
+  def [](key)
+    key = key.to_sym if key.is_a?(String)
+    if @lazy_loading
+      @processed[key] ||= process(super(key))
+    else
+      super(key)
+    end
   end
 
   def method_missing(method, *args)
@@ -38,7 +58,13 @@ class ConfigHash < Hash
       self[key] = args[0]
 
       class << self; self; end.class_eval do
-        define_method(key) { self[key] }
+        define_method(key) do
+          if @lazy_loading
+            @processed[key] ||= process(self[key])
+          else
+            self[key]
+          end
+        end
       end
     end
   end
@@ -66,12 +92,12 @@ class ConfigHash < Hash
       when Hash                        then ConfigHash.new(
         value,
         value.default,
-        freeze: @freeze, processors: @processors,
+        freeze: @freeze, processors: @processors, lazy_loading: @lazy_loading,
         &value.default_proc
       )
       when Array                       then value.map { |sv| construct(sv) }
       when Class, Module, Proc, Method then value
-      else                                  @processors.any? ? process(value) : value
+      else                                  (!@lazy_loading && @processors.any?) ? process(value) : value
     end.tap { |calced| calced.freeze if @freeze }
   end
 end
