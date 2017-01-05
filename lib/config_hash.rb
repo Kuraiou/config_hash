@@ -38,7 +38,7 @@ class ConfigHash < Hash
   def [](key)
     key = key.to_sym if key.is_a? String
     if @raise_on_missing && !self.include?(key)
-      raise ArgumentError.new("Missing Key #{key} in #{self.keys}!")
+      raise KeyError.new("key not found: #{key}")
     end
 
     if @lazy_loading && @processors.any?
@@ -105,7 +105,7 @@ class ConfigHash < Hash
 
       self[key] # assignment should return the value
     else
-      raise ArgumentError.new("Missing Key #{method}!") if @raise_on_missing
+      raise KeyError.new("key not found: #{method}!") if @raise_on_missing
       nil
     end
   end
