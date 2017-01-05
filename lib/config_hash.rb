@@ -1,7 +1,9 @@
 require 'config_hash/processors'
 
 class ConfigHash < Hash
-  def initialize(hash, default=nil, **options, &default_block)
+  include ConfigHash::Enumerable
+
+  def initialize(hash, **options)
     unless hash.kind_of?(Hash)
       raise ArgumentError.new("first argument must be a hash!")
     end
@@ -20,6 +22,8 @@ class ConfigHash < Hash
       @processors << ConfigHash::Processors.method(proc) if options[proc]
     end
 
+    super(hash.default, &hash.default_proc)
+
     # recursively reconstruct this hash from the passed in hash.
     hash.each do |key, value|
       key = key.to_sym if key.is_a?(String)
@@ -37,7 +41,7 @@ class ConfigHash < Hash
       raise ArgumentError.new("Missing Key #{key} in #{self.keys}!")
     end
 
-    if @lazy_loading
+    if @lazy_loading && @processors.any?
       @processed[key] ||= process(super(key))
     else
       super(key)
@@ -45,8 +49,6 @@ class ConfigHash < Hash
   end
 
   def []=(key, value)
-    return super(key, value) if self.frozen? # will raise an error.
-
     key = key.to_sym if key.is_a? String
     super(key, value).tap { __build_accessor(key) }
   end
@@ -56,20 +58,42 @@ class ConfigHash < Hash
   # if appropriate.
 
   def values
-    super unless @lazy_loading && @processors.any?
+    return super unless @lazy_loading && @processors.any?
     self.keys.map { |k| self[k] }
   end
 
   # use [] accessor to process values correctly for lazy loading
   def each
-    super unless @lazy_loading && @processors.any?
+    return super unless @lazy_loading && @processors.any?
     self.keys.each { |k| yield k, self[k] }
   end
 
   def map
-    super unless @lazy_loading && @processors.any?
+    return super unless @lazy_loading && @processors.any?
     self.keys.map { |k| yield k, self[k] }
   end
+
+  def select
+    return super unless @lazy_loading && @processors.any?
+    selected = Hash[
+      self.keys.select { |k| yield k, self[k] }.map { |k| [k, self[k]] }
+    ]
+    self.class.new(selected,
+      freeze:           @freeze,
+      processors:       @processors,
+      lazy_loading:     @lazy_loading,
+      raise_on_missing: @raise_on_missing,
+    )
+  end
+
+  [:all?, :any?, :none?, :one?].each do |method|
+    define_method(method) do
+      return super unless @lazy_loading && @processors.any?
+      self.keys.send(method) { |k| yield k, self[k] }
+    end
+  end
+
+  ## misc. overrides
 
   def method_missing(method, *args)
     # if we're not freezing, we can allow assignment and expect nil results.
@@ -107,6 +131,11 @@ class ConfigHash < Hash
     end
   end
 
+  # returns the value as reduced by the processors.
+  # only applies to scalars that are not class, module, proc, or method.
+  #
+  # @param [Mixed] value The value to process
+  # @return [Mixed] the value, modified by calls to the processor.
   def process(value)
     case value
     when ConfigHash then value # the sub-config-hash will process on its own
@@ -122,12 +151,10 @@ class ConfigHash < Hash
       when ConfigHash                  then value
       when Hash                        then ConfigHash.new(
         value,
-        value.default,
         freeze:           @freeze,
         processors:       @processors,
         lazy_loading:     @lazy_loading,
         raise_on_missing: @raise_on_missing,
-        &value.default_proc
       )
       when Array                       then value.map { |sv| construct(sv) }
       when Class, Module, Proc, Method then value
