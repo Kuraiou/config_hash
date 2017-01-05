@@ -55,26 +55,28 @@ class ConfigHash < Hash
   # these overrides use [] to ensure that all values are processed correctly
   # if appropriate.
 
-  def values
-    return super unless @lazy_loading && @processors.any?
+  def values(&block)
+    return super(&block) unless @lazy_loading && @processors.any?
     self.keys.map { |k| self[k] }
   end
 
   # use [] accessor to process values correctly for lazy loading
-  def each
-    return super unless @lazy_loading && @processors.any?
-    self.keys.each { |k| yield k, self[k] }
+  def each(&block)
+    return super(&block) unless @lazy_loading && @processors.any?
+    self.keys.each { |k| block.(k, self[k]) }
   end
 
-  def map
-    return super unless @lazy_loading && @processors.any?
-    self.keys.map { |k| yield k, self[k] }
+  def map(&block)
+    return super(&block) unless @lazy_loading && @processors.any?
+    self.keys.map { |k| block.(k, self[k]) }
   end
 
-  def select
-    return super unless @lazy_loading && @processors.any?
+  # return a new ConfigHash that only represents the selected values, assuming
+  # the values being yielded are processed.
+  def select(&block)
+    return super(&block) unless @lazy_loading && @processors.any?
     selected = Hash[
-      self.keys.select { |k| yield k, self[k] }.map { |k| [k, self[k]] }
+      self.keys.select { |k| block.(k, self[k]) }.map { |k| [k, self[k]] }
     ]
     self.class.new(selected,
       freeze:           @freeze,
@@ -85,9 +87,9 @@ class ConfigHash < Hash
   end
 
   [:all?, :any?, :none?, :one?].each do |method|
-    define_method(method) do
-      return super unless @lazy_loading && @processors.any?
-      self.keys.send(method) { |k| yield k, self[k] }
+    define_method(method) do |&block|
+      return super(&block) unless @lazy_loading && @processors.any?
+      self.keys.send(method) { |k| block.(k, self[k]) }
     end
   end
 
