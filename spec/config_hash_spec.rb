@@ -130,6 +130,29 @@ RSpec.describe ConfigHash do
         )
       end
     end
+
+    describe '#all' do
+      let(:options) { {lazy_loading: true, processors: [->(v) { v.to_s + 'a' }] } }
+
+      it 'returns all? assuming processed values' do
+        expect(config_hash.subhash.all? do |k,v|
+          v.is_a?(Array) ? v.all?{|sv| sv.end_with?('a')} : v.end_with?('a')
+        end).to eq true
+      end
+    end
+
+    describe '#each' do
+      let(:options) { {lazy_loading: true, processors: [->(v) { v.to_s + 'a' }] } }
+
+      context 'lazy_loading: true' do
+        let(:ll) { true }
+        it 'processes_values' do
+          values = []
+          config_hash.subhash.each { |k, v| values << v }
+          expect(values).to eq(['hia', ['1a', '2a', '3a']])
+        end
+      end
+    end
   end
 
   describe '#[]' do
