@@ -174,7 +174,7 @@ RSpec.describe ConfigHash do
     context 'when freeze is false and raise_on_missing is true' do
       let(:options) { {freeze: false} }
       it 'raises an error for an accessor' do
-        expect{ config_hash.foo }.to raise_error(ArgumentError)
+        expect{ config_hash.foo }.to raise_error(KeyError)
       end
 
       it 'allows assignment, creating method accessor' do
@@ -196,13 +196,13 @@ RSpec.describe ConfigHash do
       it 'unsets the method accessor as well as removing the value' do
         config_hash.delete :k
         expect(config_hash).to_not respond_to :k
-        expect{ config_hash[:k] }.to raise_error(ArgumentError)
+        expect{ config_hash[:k] }.to raise_error(KeyError)
       end
 
       it 'converts strings to symbols' do
         config_hash.delete 'k'
         expect(config_hash).to_not respond_to :k
-        expect{ config_hash[:k] }.to raise_error(ArgumentError)
+        expect{ config_hash[:k] }.to raise_error(KeyError)
       end
     end
   end

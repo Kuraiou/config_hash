@@ -1,8 +1,6 @@
 require 'config_hash/processors'
 
 class ConfigHash < Hash
-  include ConfigHash::Enumerable
-
   def initialize(hash, **options)
     unless hash.kind_of?(Hash)
       raise ArgumentError.new("first argument must be a hash!")
