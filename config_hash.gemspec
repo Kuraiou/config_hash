@@ -1,6 +1,6 @@
 Gem::Specification.new do |s|
   s.name = 'config_hash'
-  s.version = '1.1.8'
+  s.version = '1.1.9'
   s.summary = 'a hash built for configurations.'
   s.description = 'A safe hash that can process values and use dot notation.'
   s.authors = ['Zach Lome']
@@ -13,4 +13,4 @@ Gem::Specification.new do |s|
 
   s.add_development_dependency 'bundler', '~> 1.11'
   s.add_development_dependency 'rspec', '~> 3.4'
-  end
+end

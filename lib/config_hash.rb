@@ -29,6 +29,8 @@ class ConfigHash < Hash
     self.freeze if @freeze
   end
 
+  ## Hash Accessor Methods
+
   def [](key)
     key = key.to_sym if key.is_a? String
     if @raise_on_missing && !self.include?(key)
@@ -47,6 +49,26 @@ class ConfigHash < Hash
 
     key = key.to_sym if key.is_a? String
     super(key, value).tap { __build_accessor(key) }
+  end
+
+  ## Modified Enumeration Methods
+  # these overrides use [] to ensure that all values are processed correctly
+  # if appropriate.
+
+  def values
+    super unless @lazy_loading && @processors.any?
+    self.keys.map { |k| self[k] }
+  end
+
+  # use [] accessor to process values correctly for lazy loading
+  def each
+    super unless @lazy_loading && @processors.any?
+    self.keys.each { |k| yield k, self[k] }
+  end
+
+  def map
+    super unless @lazy_loading && @processors.any?
+    self.keys.map { |k| yield k, self[k] }
   end
 
   def method_missing(method, *args)
@@ -86,7 +108,13 @@ class ConfigHash < Hash
   end
 
   def process(value)
-    @processors.reduce(value) { |modified, proc| proc.call(modified) }
+    case value
+    when ConfigHash then value # the sub-config-hash will process on its own
+    when Hash       then Hash[value.keys.map { |k| [k, process(value[k])] }]
+    when Array      then value.map { |sv| process(sv) }
+    when Class, Module, Proc, Method then value
+    else @processors.reduce(value) { |modified, proc| proc.call(modified) }
+    end
   end
 
   def construct(value)
