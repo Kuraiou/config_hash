@@ -130,10 +130,22 @@ RSpec.describe ConfigHash do
       end
     end
 
-    context 'when freeze is false' do
-      let(:options) { {freeze: false} }
+    context 'when freeze is false and raise_on_missing is false' do
+      let(:options) { {freeze: false, raise_on_missing: false} }
       it 'returns nil for an accessor' do
         expect(config_hash.foo).to be_nil
+      end
+
+      it 'allows assignment, creating method accessor' do
+        config_hash.foo = :bar
+        expect(config_hash.foo).to eq :bar
+      end
+    end
+
+    context 'when freeze is false and raise_on_missing is true' do
+      let(:options) { {freeze: false} }
+      it 'raises an error for an accessor' do
+        expect{ config_hash.foo }.to raise_error(ArgumentError)
       end
 
       it 'allows assignment, creating method accessor' do
@@ -155,13 +167,13 @@ RSpec.describe ConfigHash do
       it 'unsets the method accessor as well as removing the value' do
         config_hash.delete :k
         expect(config_hash).to_not respond_to :k
-        expect(config_hash[:k]).to be_nil
+        expect{ config_hash[:k] }.to raise_error(ArgumentError)
       end
 
       it 'converts strings to symbols' do
         config_hash.delete 'k'
         expect(config_hash).to_not respond_to :k
-        expect(config_hash[:k]).to be_nil
+        expect{ config_hash[:k] }.to raise_error(ArgumentError)
       end
     end
   end
