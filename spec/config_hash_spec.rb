@@ -8,6 +8,11 @@ RSpec.describe ConfigHash do
         true => 1,
         (0..10) => 'yay',
       },
+      subhash: {
+        a_value: :hi,
+        value_list: [ 1, 2, 3 ],
+      },
+      subvalues: [ 1, 2, 3 ],
       k: [
         {
           v: :bar,
@@ -89,6 +94,30 @@ RSpec.describe ConfigHash do
 
         it 'does still process the value' do
           expect{ config_hash[:d1][:x][:z] }.to change{ config_hash[:d1][:x].instance_variable_get(:@processed).length }.by(1)
+        end
+
+        context 'when the return value is an array of things that need processing' do
+          it 'processes all key values' do
+            expect(config_hash.subvalues).to eq [6, 7, 8]
+          end
+        end
+      end
+    end
+
+    describe '#values' do
+      let(:options) { {lazy_loading: ll, processors: [->(v) { v.is_a?(Numeric) ? v+5 : v}] } }
+
+      context 'lazy_loading: false' do
+        let(:ll) { false }
+        it 'has all processed values' do
+          expect(config_hash.subhash.values).to eq [:hi, [6, 7, 8]]
+        end
+      end
+
+      context 'lazy_loading: true' do
+        let(:ll) { true }
+        it 'processes_values' do
+          expect(config_hash.subhash.values).to eq [:hi, [6, 7, 8]]
         end
       end
     end
