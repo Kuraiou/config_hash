@@ -47,4 +47,14 @@ end
 config = ConfigHash.new({foo: [{bar: 'hello'}]}, processors: [Singleton.method(:processor)])
 config.foo # [{bar: 'hello'}]
 config.foo[0].bar # 'hello world'
+
+# by default, missing values raise an error:
+config = ConfigHash.new({foo: :bar})
+config.baz # raises an error!
+config[:baz] # raises an error!
+
+# if you want to have it return nil like a typical hash, pass raise_on_missing: false
+config = ConfigHash.new({foo: :bar}, raise_on_missing: false)
+config.baz # nil
+config[:baz] # nil
 ```
